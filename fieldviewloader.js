@@ -7,6 +7,7 @@ const async = require('async');
 const mapboxToken = process.argv[4];
 const imageDirectory = process.cwd();
 const path = require('path');
+const gdal = require('gdal');
 
 //var urlRoot = 'http://localhost:3000/api/'
 var urlRoot = 'http://fieldviewapi.herokuapp.com/api/'
@@ -43,13 +44,31 @@ request(accesstokenOptions, function(error, res, body) {
                     '&filter[where][fieldId]=' + fieldId +
                     '&filter[where][customerId]=' + customerId +
                     '&filter[where][collectionDate]=' + date;
-                console.log(imageExistsUrl);
                 var imageExistsOptions = {
                     url: imageExistsUrl,
                     method: 'GET'
                 };
 
+                var filePath = path.resolve(imageDirectory, file);
+
                 async.waterfall([
+                function(callback) {
+                    var src = gdal.open(filePath);
+                    var width = src.rasterSize.x;
+                    var height = src.rasterSize.y;
+                    var bandCount = src.bands.count();
+                    var datatype = src.bands.get(1).datatype;
+                    src.close();
+                    var dataset = gdal.open(filePath, 'r+', 'GTiff', width, height, bandCount, datatype);
+                    dataset.bands.forEach(function(band) {
+                        band.noDataValue = 0;
+                        band.flush();
+                    });
+                    dataset.flush();
+                    dataset.close();
+                    console.log('No data values set to 0');
+                    callback();
+                },
                 async.apply(request, fieldExistsOptions),
                 function(res, body, callback) {
                     if (res.statusCode === 404) {
@@ -109,7 +128,7 @@ request(accesstokenOptions, function(error, res, body) {
                         url: productCreateUrl,
                         method: 'POST',
                         json: {
-                            "productType": productType,
+                            "productType": productType
                         }
                     };
                     request(productCreateOptions, function(error, res, body) {
@@ -127,7 +146,7 @@ request(accesstokenOptions, function(error, res, body) {
                         name: product.id
                     });
 
-                    progress.on('error', function(err){
+                    progress.on('error', function(error){
                         callback(error);
                     });
 

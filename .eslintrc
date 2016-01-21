@@ -36,7 +36,8 @@
             "no-unused-vars": 0,
             "camelcase": 0,
             "no-underscore-dangle": 0,
-            "no-trailing-spaces": 1
+            "no-trailing-spaces": 1,
+            "no-console": 0
         }
 }
 
