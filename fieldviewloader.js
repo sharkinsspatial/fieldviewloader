@@ -150,6 +150,12 @@ request(accesstokenOptions, function(error, res, body) {
                         callback(error);
                     });
 
+
+                    progress.on('progress', function(p){
+                        console.log(p);
+                    });
+
+
                     progress.once('finished', function(){
                         callback(null);
                     });
