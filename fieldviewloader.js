@@ -167,66 +167,75 @@ fieldviewloader.checkProductExist = function(urls, res, body, callback) {
             callback(null, null, image);
         }
         else {
-            callback('Product exists');
+            console.log('Product exists');
+            callback(null, null, null);
         }
     });
 
 };
 
 fieldviewloader.createProduct = function(urls, res, body, callback) {
-    var productCreateUrl = util.format('%s/images/%s/products?access_token=%s',
-                                       urls.productData.apiRoot,
-                                       body.id, urls.productData.access_token);
+    if (!body) {
+        callback(null);
+    } else {
+        var productCreateUrl = util.format('%s/images/%s/products?access_token=%s',
+            urls.productData.apiRoot,
+            body.id, urls.productData.access_token);
 
-    request.post(productCreateUrl, { json: { id: urls.productData.productId,
-        productType: urls.productData.productType }}, function(error, res, body) {
-            console.log('Product created');
-            if (error) { callback(error); }
-            callback(null);
-    });
+            request.post(productCreateUrl, { json: { id: urls.productData.productId,
+                         productType: urls.productData.productType }}, function(error, res, body) {
+                             console.log('Product created');
+                             if (error) { callback(error); }
+                             callback(null);
+                         });
+    }
 };
 
 fieldviewloader.mapboxUpload = function(urls, file, opts, res, body, callback) {
-    console.log('Uploading to Mapbox');
-    var filePath = path.resolve(opts.imageDirectory, file);
-    var stat = fs.statSync(filePath);
-    console.log();
-    var bar = new ProgressBar('Uploading to Mapbox [:bar] :ptage % uploaded :estimated remaining',
-          {
-              complete: '=',
-              incomplete: ' ',
-              width: 30,
-              total: stat.size,
-              clear: true
-          });
+    if (!body) {
+        callback(null, null, null);
+    } else {
+        console.log('Uploading to Mapbox');
+        var filePath = path.resolve(opts.imageDirectory, file);
+        var stat = fs.statSync(filePath);
+        console.log();
+        var bar = new ProgressBar('Uploading to Mapbox [:bar] :ptage % uploaded :estimated remaining',
+              {
+                  complete: '=',
+                  incomplete: ' ',
+                  width: 30,
+                  total: stat.size,
+                  clear: true
+              });
 
-    var progress = upload({
-        file: filePath,
-        account: 'infraredbaron',
-        accesstoken: opts.mapboxToken,
-        mapid: 'infraredbaron.' + urls.productData.productId,
-        name: urls.productData.productId
-    });
+              var progress = upload({
+                  file: filePath,
+                  account: 'infraredbaron',
+                  accesstoken: opts.mapboxToken,
+                  mapid: 'infraredbaron.' + urls.productData.productId,
+                  name: urls.productData.productId
+              });
 
-    progress.on('error', function(error){
-        callback(error);
-    });
+              progress.on('error', function(error){
+                  callback(error);
+              });
 
-    progress.on('progress', function(p){
-        var percentage = Math.round(p.percentage);
-        var date = new Date(null);
-        date.setSeconds(p.eta);
-        bar.tick(p.delta, {
-            'ptage': percentage,
-            'estimated': date.getUTCHours() + ':'
-            + date.getUTCMinutes() + ':'
-            + date.getUTCSeconds()
-        });
-    });
+              progress.on('progress', function(p){
+                  var percentage = Math.round(p.percentage);
+                  var date = new Date(null);
+                  date.setSeconds(p.eta);
+                  bar.tick(p.delta, {
+                      'ptage': percentage,
+                      'estimated': date.getUTCHours() + ':'
+                      + date.getUTCMinutes() + ':'
+                      + date.getUTCSeconds()
+                  });
+              });
 
-    progress.once('finished', function(){
-        callback(null, null, body);
-    });
+              progress.once('finished', function(){
+                  callback(null, null, body);
+              });
+    }
 };
 
 fieldviewloader.setNodata = function(opts, file, callback) {
