@@ -1,6 +1,6 @@
 {
   "name": "fieldviewloader",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "Imagery loader for fieldviewapi.",
   "author": "Sean Harkins <sharkinsgis@gmail.com> (https://github.com/sharkinsspatial)",
   "license": "ISC",
@@ -10,21 +10,21 @@
     "geojson-extent": "^0.3.1",
     "lodash": "^3.10.1",
     "mapbox-upload": "^4.2.1",
+    "minimist": "^1.2.0",
     "moment": "^2.11.1",
     "progress": "^1.1.8",
     "request": "^2.67.0"
   },
   "scripts": {
-    "test": "test/Test.js"
+    "test": " tape test/*.js"
   },
   "bin": {
-    "fieldviewloader": "fieldviewloader.js",
-    "fieldLoader": "fieldLoader.js",
-    "farmLoader": "farmLoader.js",
-    "progTest": "progTest.js"
+    "fieldviewloader": "bin/fieldviewloader.js",
+    "fieldloader": "bin/fieldloader.js"
   },
   "devDependencies": {
     "faucet": "0.0.1",
+    "sinon": "^1.17.3",
     "tape": "^4.4.0"
   }
 }

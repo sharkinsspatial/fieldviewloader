@@ -1,179 +1,248 @@
-#! /usr/bin/env node
 const upload = require('mapbox-upload');
 const fs = require('fs');
 const request = require('request');
 const moment = require('moment');
 const async = require('async');
-const mapboxToken = process.argv[4];
-const imageDirectory = process.cwd();
 const path = require('path');
 const gdal = require('gdal');
+const util = require('util');
+const url = require('url');
+const ProgressBar = require('progress')
 
-//var urlRoot = 'http://localhost:3000/api/'
-var urlRoot = 'http://fieldviewapi.herokuapp.com/api/'
-var accesstokenOptions = {
-    url: urlRoot + 'CustomerMembers/login',
-    method: 'POST',
-    json: {"email": process.argv[2],
-        "password": process.argv[3]
-    }
+module.exports = fieldviewloader;
+
+function fieldviewloader(opts) {
+    opts = fieldviewloader.opts(opts);
+    fieldviewloader.getCredentials(opts, fieldviewloader.processFiles);
+}
+
+fieldviewloader.opts = function(opts) {
+    opts = opts || {};
+    opts.mapboxToken = opts.mapboxToken || process.env.MAPBOX_TOKEN;
+    opts.email = opts.email || process.env.ADMIN_EMAIL;
+    opts.password = opts.password || process.env.ADMIN_PASSWORD;
+    opts.urlRoot = opts.urlRoot || fieldviewloader.urlRoot;
+    opts.imageDirectory = opts.imageDirectory;
+    if (!opts.imageDirectory)
+        throw new Error('A valid image directory is required');
+    return opts;
 };
-request(accesstokenOptions, function(error, res, body) {
-    if (res.statusCode != 200) { console.log('Invalid credentials') } else {
-        var access_token = '?access_token=' + body.id;
-        var files = fs.readdirSync(imageDirectory);
-        async.forEachSeries(files, function(file, callback) {
-            var components = file.split('_');
-            if (components.length == 8) {
-                var customerId = parseInt(components[7]);
-                var fieldId = parseInt(components[6]);
-                var fieldUrl = urlRoot + 'customers/' + customerId +
-                    '/fields/rel/' + fieldId + access_token;
-                var fieldExistsOptions = {
-                    url: fieldUrl,
-                    method: 'HEAD'
-                };
-                var fieldRelationOptions = {
-                    url: fieldUrl,
-                    method: 'PUT'
-                };
 
-                var productType = components[4];
-                var date = moment(components[5], 'YY-MM-DD').format('YYYY-MM-DD');
-                var imageExistsUrl = urlRoot + 'images' + access_token +
-                    '&filter[where][fieldId]=' + fieldId +
-                    '&filter[where][customerId]=' + customerId +
-                    '&filter[where][collectionDate]=' + date;
-                var imageExistsOptions = {
-                    url: imageExistsUrl,
-                    method: 'GET'
-                };
+fieldviewloader.getCredentials = function(opts, callback){
+    try { opts = fieldviewloader.opts(opts) }
+    catch (err) { return callback(err) }
+    var url = util.format('%s/api/CustomerMembers/login', opts.urlRoot);
+    request.post(url, { json: {
+        email: opts.email,
+        password: opts.password
+    }}, function(err, res, body) {
+        callback(err, res, body, opts);
+    });
+};
 
-                var filePath = path.resolve(imageDirectory, file);
-
-                async.waterfall([
-                function(callback) {
-                    var src = gdal.open(filePath);
-                    var width = src.rasterSize.x;
-                    var height = src.rasterSize.y;
-                    var bandCount = src.bands.count();
-                    var datatype = src.bands.get(1).datatype;
-                    src.close();
-                    var dataset = gdal.open(filePath, 'r+', 'GTiff', width, height, bandCount, datatype);
-                    dataset.bands.forEach(function(band) {
-                        band.noDataValue = 0;
-                        band.flush();
-                    });
-                    dataset.flush();
-                    dataset.close();
-                    console.log('No data values set to 0');
-                    callback();
-                },
-                async.apply(request, fieldExistsOptions),
-                function(res, body, callback) {
-                    if (res.statusCode === 404) {
-                        request(fieldRelationOptions, function(error, res) {
-                            console.log('Relationship created');
-                            callback();
-                        });
-                    }
-                    else {
-                        callback();
-                    }
-                },
-                async.apply(request, imageExistsOptions),
-                function(res, body, callback)   {
-                    var images = JSON.parse(body);
-                    if (images.length == 0) {
-                        var imageCreateUrl = urlRoot + 'images' + access_token;
-                        var imageCreateOptions = {
-                            url: imageCreateUrl,
-                            method: 'POST',
-                            json: {
-                                "collectionDate": date,
-                                "customerId": customerId,
-                                "fieldId": fieldId
-                            }
-                        };
-                        request(imageCreateOptions, function(error, res, body) {
-                            callback(null, res, body);
-                        });
-                    }
-                    else {
-                        console.log('Image exists for ' + file);
-                        callback(null, res, images[0]);
-                    }
-                },
-                function(res, body, callback) {
-                    var image = body;
-                    var productExitsUrl = urlRoot + 'images/' + image.id
-                        + '/products' + access_token
-                        + '&filter[where][productType]=' + productType;
-                    request(productExitsUrl, function(error, res, body) {
-                        var products = JSON.parse(body);
-                        if (products.length === 0) {
-                           callback(null, null, image);
-                        }
-                        else {
-                            console.log('Product exsits for ' + file);
-                            callback(true);
-                        }
-                    });
-                },
-                function(res, body, callback) {
-                    var image = body;
-                    var productCreateUrl = urlRoot + 'images/' + image.id
-                        + '/products' + access_token;
-                    var productCreateOptions = {
-                        url: productCreateUrl,
-                        method: 'POST',
-                        json: {
-                            "productType": productType
-                        }
-                    };
-                    request(productCreateOptions, function(error, res, body) {
-                        callback(null, res, body);
-                    });
-                },
-                function(res, body, callback) {
-                    var product = body;
-                    var filePath = path.resolve(imageDirectory, file);
-                    var progress = upload({
-                        file: filePath,
-                        account: 'infraredbaron',
-                        accesstoken: mapboxToken,
-                        mapid: 'infraredbaron.' + product.id,
-                        name: product.id
-                    });
-
-                    progress.on('error', function(error){
-                        callback(error);
-                    });
-
-
-                    progress.on('progress', function(p){
-                        console.log(p);
-                    });
-
-
-                    progress.once('finished', function(){
-                        callback(null);
-                    });
-                }
-                ],
-                function(error) {
-                    if (error) {
-                        console.log(error);
-                    }
-                    else {
-                        console.log('Loaded ' + file);
-                    }
-                    callback();
-                });
+fieldviewloader.processFiles = function(err, res, body, opts) {
+    if (err) {
+        throw err;
+    }
+    else if (res.statusCode !== 200) {
+        throw new Error(body && body.message || 'Invalid credentials');
+    }
+    var token = body.id;
+    var files = fs.readdirSync(opts.imageDirectory);
+    async.forEachSeries(files, function(file, callback) {
+        var urls = fieldviewloader.parseFilename(opts.urlRoot, token,
+                                                 file, callback);
+        if (urls instanceof Error) {
+            console.log(urls.message);
         }
         else {
-            console.log('Invalid file name ' + file);
+            fieldviewloader.processFile(urls, file, opts, callback);
+        }
+    }, function(err) {
+        if (err) { console.log(err) }
+    });
+};
+
+fieldviewloader.processFile = function(urls, file, opts, callback) {
+    async.waterfall([
+        async.apply(fieldviewloader.setNodata, opts, file),
+        async.apply(request, { url: urls.fieldUrl, method: 'HEAD' }),
+        async.apply(fieldviewloader.handleFieldRel, urls),
+        async.apply(request, { url: urls.imageExistsUrl, method: 'GET' }),
+        async.apply(fieldviewloader.handleImageExist, urls),
+        async.apply(fieldviewloader.checkProductExist, urls),
+        async.apply(fieldviewloader.mapboxUpload, urls, file, opts),
+        async.apply(fieldviewloader.createProduct, urls)
+    ],
+    function(error) {
+        if (error) {
+            callback(error);
+        }
+        else {
+            callback();
+            console.log('Loaded ' + file);
         }
     });
+};
+
+fieldviewloader.parseFilename = function(urlRoot, access_token, file) {
+    var apiRoot = url.resolve(urlRoot, 'api');
+    var components = file.split('_');
+    var error = new Error('Invalid file name ' + file);
+    if (components.length !== 8) {
+        return error;
     }
-});
+    var customerComponents = components[7].split('-');
+    if (customerComponents.length !== 2) {
+        return error;
+    }
+    var customerId = parseInt(customerComponents[0]);
+    var fieldId = parseInt(components[6]);
+    var fieldUrl = util.format('%s/customers/%s/fields/rel/%s?access_token=%s',
+                               apiRoot, customerId, fieldId, access_token);
+
+    var productType = components[4];
+    var collectionDate = moment(components[5], 'YY-MM-DD').format('YYYY-MM-DD');
+    var query = util.format('filter[where][fieldId]=%s' +
+                            '&filter[where][customerId]=%s' +
+                            '&filter[where][collectionDate]=%s' +
+                            '&access_token=%s',
+                            fieldId, customerId, collectionDate, access_token);
+    var imageExistsUrl = util.format('%s/images?%s', apiRoot, query);
+    var imageCreateUrl = util.format('%s/images?access_token=%s', apiRoot,
+                                     access_token);
+    var imageCreateData = { customerId: customerId, fieldId: fieldId,
+        collectionDate: collectionDate};
+
+    var productId = customerId + components[6] + components[5] + components[4];
+    var productData = { productId: productId, productType: productType,
+        access_token: access_token, apiRoot: apiRoot };
+    return { fieldUrl: fieldUrl, imageExistsUrl: imageExistsUrl,
+        imageCreateUrl: imageCreateUrl, imageCreateData: imageCreateData,
+        productData: productData
+    };
+
+};
+
+fieldviewloader.handleFieldRel = function(urls, res, body, callback) {
+    if (res.statusCode === 404) {
+        request.put(urls.fieldUrl, function(error, res) {
+            console.log('Relationship created');
+            if (error) { callback(error); }
+            callback();
+        });
+    }
+    else {
+        console.log('Relationship exists');
+        callback();
+    }
+};
+
+fieldviewloader.handleImageExist = function(urls, res, body, callback) {
+    var images = JSON.parse(body);
+    if (images.length == 0) {
+        console.log('Creating image');
+        request.post(urls.imageCreateUrl, { json: urls.imageCreateData },
+                     function(error, res, body) {
+                         if (error) { callback(error); }
+                         callback(null, res, body);
+                     });
+    }
+    else {
+        console.log('Image exists');
+        callback(null, res, images[0]);
+    }
+};
+
+fieldviewloader.checkProductExist = function(urls, res, body, callback) {
+    var image = body;
+    var productExistsUrl = util.format('%s/images/%s/products?access_token=%s' +
+        '&filter[where][productType]=%s', urls.productData.apiRoot, body.id,
+            urls.productData.access_token, urls.productData.productType);
+
+    request.get(productExistsUrl, function(error, res, body) {
+        if (error) { callback(error); }
+        var products = JSON.parse(body);
+        if (products.length === 0) {
+            callback(null, null, image);
+        }
+        else {
+            callback('Product exists');
+        }
+    });
+
+};
+
+fieldviewloader.createProduct = function(urls, res, body, callback) {
+    var productCreateUrl = util.format('%s/images/%s/products?access_token=%s',
+                                       urls.productData.apiRoot,
+                                       body.id, urls.productData.access_token);
+
+    request.post(productCreateUrl, { json: { id: urls.productData.productId,
+        productType: urls.productData.productType }}, function(error, res, body) {
+            console.log('Product created');
+            if (error) { callback(error); }
+            callback(null);
+    });
+};
+
+fieldviewloader.mapboxUpload = function(urls, file, opts, res, body, callback) {
+    console.log('Uploading to Mapbox');
+    var filePath = path.resolve(opts.imageDirectory, file);
+    var stat = fs.statSync(filePath);
+    console.log();
+    var bar = new ProgressBar('Uploading to Mapbox [:bar] :ptage % uploaded :estimated remaining',
+          {
+              complete: '=',
+              incomplete: ' ',
+              width: 30,
+              total: stat.size,
+              clear: true
+          });
+
+    var progress = upload({
+        file: filePath,
+        account: 'infraredbaron',
+        accesstoken: opts.mapboxToken,
+        mapid: 'infraredbaron.' + urls.productData.productId,
+        name: urls.productData.productId
+    });
+
+    progress.on('error', function(error){
+        callback(error);
+    });
+
+    progress.on('progress', function(p){
+        var percentage = Math.round(p.percentage);
+        var date = new Date(null);
+        date.setSeconds(p.eta);
+        bar.tick(p.delta, {
+            'ptage': percentage,
+            'estimated': date.getUTCHours() + ':'
+            + date.getUTCMinutes() + ':'
+            + date.getUTCSeconds()
+        });
+    });
+
+    progress.once('finished', function(){
+        callback(null, null, body);
+    });
+};
+
+fieldviewloader.setNodata = function(opts, file, callback) {
+    var filePath = path.resolve(opts.imageDirectory, file);
+    var src = gdal.open(filePath);
+    var width = src.rasterSize.x;
+    var height = src.rasterSize.y;
+    var bandCount = src.bands.count();
+    var datatype = src.bands.get(1).datatype;
+    src.close();
+    var dataset = gdal.open(filePath, 'r+', 'GTiff', width, height, bandCount, datatype);
+    dataset.bands.forEach(function(band) {
+        band.noDataValue = 0;
+        band.flush();
+    });
+    dataset.flush();
+    dataset.close();
+    callback();
+};
