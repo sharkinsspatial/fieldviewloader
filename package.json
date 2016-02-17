@@ -1,6 +1,6 @@
 {
   "name": "fieldviewloader",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "Imagery loader for fieldviewapi.",
   "author": "Sean Harkins <sharkinsgis@gmail.com> (https://github.com/sharkinsspatial)",
   "license": "ISC",
@@ -20,7 +20,8 @@
   },
   "bin": {
     "fieldviewloader": "bin/fieldviewloader.js",
-    "fieldloader": "bin/fieldloader.js"
+    "fieldloader": "bin/fieldloader.js",
+    "createMapboxShapes": "bin/createMapboxShapes.js"
   },
   "devDependencies": {
     "faucet": "0.0.1",
