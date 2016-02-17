@@ -13,7 +13,7 @@ var email = process.env.ADMIN_EMAIL;
 var password = process.env.ADMIN_PASSWORD;
 var filepath = argv._[0];
 var filename = filepath.split('.')[0];
-var createGeojson = util.format('ogr2ogr -f "GeoJSON" newfields.geojson %s -t_srs "EPSG:4326" -sql "SELECT OBJECTID as id, FieldName as name from %s"', filepath, filename);
+var createGeojson = util.format('ogr2ogr -f "GeoJSON" newfields.geojson %s -t_srs "EPSG:4326" -sql "SELECT OBJECTID as id, FieldName as name, FarmID as farmId from %s"', filepath, filename);
 var options = {
     email: email,
     password: password,
