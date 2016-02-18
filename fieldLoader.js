@@ -46,18 +46,28 @@ fieldloader.getCredentials = function(opts, callback){
 fieldloader.processFile = function(err, opts, credentials) {
     var url = util.format('%s/api/fields?access_token=%s', opts.urlRoot, credentials.id);
     var json = JSON.parse(fs.readFileSync(opts.geojson, 'utf8'));
-    async.forEachLimit(json.features, 5, function(feature, callback) {
+    async.forEachLimit(json.features, 2, function(feature, callback) {
+        var name;
+        var id;
+        if (feature.properties.farm) {
+            id = 1000000 + feature.properties.farmId;
+            name = feature.properties.farm + ' - ' + 'Mosaic';
+        }
+        else {
+            id = feature.properties.id;
+            name = feature.properties.name ? feature.properties.name : 'None';
+        }
         var extent = geojsonExtent(feature);
-        var name = feature.properties.name ? feature.properties.name : 'None';
-        var field = {"name": name,
-            "id": feature.properties.id,
+        var field = {
+            "name": name,
+            "id": id,
             "farmId": feature.properties.farmId,
             "bounds": [[extent[0], extent[1]], [extent[2], extent[3]]]
         };
         request.post(url, { json: field }, function(err, res) {
             if (err) return callback(err);
             if (res.statusCode === 200) {
-                console.log(util.format('Field %s created', feature.properties.id));
+                console.log(util.format('Field %s created', id));
             }
             callback();
         });
