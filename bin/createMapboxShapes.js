@@ -12,7 +12,7 @@ exec(createFieldsShp, function(error, stdout, stderr) {
     if(error) { console.log(error) }
 });
 
-var createCentroidsShp = util.format('ogr2ogr centroids.shp %s -t_srs "EPSG:4326" -dialect sqlite -sql "SELECT ST_Centroid(geometry), OBJECTID as id, FieldName as name from %s"', filepath, filename);
+var createCentroidsShp = util.format('ogr2ogr labels.shp %s -t_srs "EPSG:4326" -dialect sqlite -sql "SELECT ST_Centroid(geometry), OBJECTID as id, FieldName as name from %s"', filepath, filename);
 exec(createCentroidsShp, function(error, stdout, stderr) {
     if(error) { console.log(error) }
 });
