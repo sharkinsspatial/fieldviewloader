@@ -12,7 +12,7 @@ var email = process.env.ADMIN_EMAIL;
 var password = process.env.ADMIN_PASSWORD;
 var filepath = argv._[0];
 var filename = filepath.split('.')[0];
-var createGeojson = util.format('ogr2ogr -f "GeoJSON" newfields.geojson %s -t_srs "EPSG:4326" -sql "SELECT OBJECTID as id, FieldName as name, FarmID as farmId from %s"', filepath, filename);
+var createGeojson = util.format('ogr2ogr -f "GeoJSON" newfields.geojson %s -t_srs "EPSG:4326" -sql "SELECT FieldID as id, FieldName as name, FarmID as farmId from %s"', filepath, filename);
 var createMosaicGeojson = util.format('ogr2ogr -f "GeoJSON" mosaicfields.geojson %s -t_srs "EPSG:4326" -dialect sqlite -sql "SELECT ST_Union(geometry), FarmID as farmId, Farm as farm FROM %s GROUP BY FarmID, Farm"', filepath, filename);
 exec(createGeojson, function(error, stdout, stderr) {
     var options = {

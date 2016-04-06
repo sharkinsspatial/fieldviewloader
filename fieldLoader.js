@@ -33,6 +33,7 @@ fieldloader.processFile = function(err, opts, credentials) {
             id = feature.properties.id;
             name = feature.properties.name ? feature.properties.name : 'None';
         }
+        console.log(id);
         var extent = geojsonExtent(feature);
         var field = {
             "name": name,
