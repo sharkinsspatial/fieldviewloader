@@ -25,13 +25,13 @@ farmloader.processFile = function(err, opts, credentials) {
 
     async.forEachLimit(json.farms, 10, function(farm, callback) {
         var farmJson = {
-            "name": farm.name,
-            "id": farm.id
+            "name": farm.Farm,
+            "id": farm.FarmID
         }
         request.post(url, { json: farmJson}, function(err, res) {
             if (err) return callback(err);
             if (res.statusCode === 200) {
-                console.log(util.format('Farm %s created', farm.id));
+                console.log(util.format('Farm %s created', farmJson.id));
             }
             callback();
         });
