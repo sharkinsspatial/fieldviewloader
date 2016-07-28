@@ -21,7 +21,8 @@ fieldloader.opts = function(opts) {
 
 fieldloader.processFile = function(err, opts, credentials) {
     var url = util.format('%s/api/fields?access_token=%s', opts.urlRoot, credentials.id);
-    var json = JSON.parse(fs.readFileSync(opts.geojson, 'utf8'));
+    //var json = JSON.parse(fs.readFileSync(opts.geojson, 'utf8'));
+    var json = opts.geojson
     async.forEachLimit(json.features, 10, function(feature, callback) {
         var name;
         var id;
