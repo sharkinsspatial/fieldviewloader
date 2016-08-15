@@ -34,7 +34,6 @@ fieldloader.processFile = function(err, opts, credentials) {
             id = feature.properties.id;
             name = feature.properties.name ? feature.properties.name : 'None';
         }
-        console.log(id);
         var extent = geojsonExtent(feature);
         var field = {
             "name": name,
@@ -42,6 +41,10 @@ fieldloader.processFile = function(err, opts, credentials) {
             "farmId": feature.properties.farmId,
             "bounds": [[extent[0], extent[1]], [extent[2], extent[3]]]
         };
+        if (!feature.properties.farmId) {
+            console.log(util.format('Field %s is missing a Farm', id));
+            callback();
+        }
         request.post(url, { json: field }, function(err, res) {
             if (err) return callback(err);
             if (res.statusCode === 200) {
