@@ -32,13 +32,15 @@ createGeojson.exec(function(error, data) {
     fieldloader(options);
 });
 
-//createMosaicGeojson.exec(function(error, data) {
-    //if(error) { console.log(error) }
-    //var options = {
-        //email: email,
-        //password: password,
-        //geojson: data
-    //};
-    //fieldloader(options);
-//});
+if(argv.batch) {
+    createMosaicGeojson.exec(function(error, data) {
+        if(error) { console.log(error) }
+        var options = {
+            email: email,
+            password: password,
+            geojson: data
+        };
+        fieldloader(options);
+    });
+}
 
