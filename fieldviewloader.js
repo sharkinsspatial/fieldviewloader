@@ -4,10 +4,11 @@ const request = require('request');
 const moment = require('moment');
 const async = require('async');
 const path = require('path');
-const gdal = require('gdal');
 const util = require('util');
 const url = require('url');
-const ProgressBar = require('progress')
+const ProgressBar = require('progress');
+const setNoData = require('./setNoData');
+const corners = require('./corners');
 
 module.exports = fieldviewloader;
 
@@ -65,8 +66,11 @@ fieldviewloader.processFiles = function(err, res, body, opts) {
 
 fieldviewloader.processFile = function(urls, file, opts, callback) {
     async.waterfall([
+        async.apply(fieldviewloader.getBounds, opts, file, urls),
         async.apply(fieldviewloader.setNodata, opts, file),
-        async.apply(request, { url: urls.fieldUrl, method: 'HEAD' }),
+        async.apply(fieldviewloader.checkFieldExists, urls),
+        async.apply(fieldviewloader.updateMosaicBounds, urls),
+        async.apply(request, { url: urls.fieldRelUrl, method: 'HEAD' }),
         async.apply(fieldviewloader.handleFieldRel, urls),
         async.apply(request, { url: urls.imageExistsUrl, method: 'GET' }),
         async.apply(fieldviewloader.handleImageExist, urls),
@@ -98,9 +102,11 @@ fieldviewloader.parseFilename = function(urlRoot, access_token, file) {
     }
     var customerId = parseInt(customerComponents[0]);
     var fieldId = parseInt(components[6]);
-    var fieldUrl = util.format('%s/customers/%s/fields/rel/%s?access_token=%s',
+    var fieldUrl = util.format('%s/fields/%s?access_token=%s',apiRoot, fieldId,
+                               access_token);
+    var mosaic = fieldId > 1000000 ? true : false;
+    var fieldRelUrl = util.format('%s/customers/%s/fields/rel/%s?access_token=%s',
                                apiRoot, customerId, fieldId, access_token);
-
     var productType = components[4];
     var collectionDate = moment(components[5], 'YY-MM-DD').format('YYYY-MM-DD');
     var query = util.format('filter[where][fieldId]=%s' +
@@ -117,16 +123,16 @@ fieldviewloader.parseFilename = function(urlRoot, access_token, file) {
     var productId = customerId + components[6] + components[5] + components[4];
     var productData = { productId: productId, productType: productType,
         access_token: access_token, apiRoot: apiRoot };
-    return { fieldUrl: fieldUrl, imageExistsUrl: imageExistsUrl,
+    return { fieldRelUrl: fieldRelUrl, imageExistsUrl: imageExistsUrl,
         imageCreateUrl: imageCreateUrl, imageCreateData: imageCreateData,
-        productData: productData
+        productData: productData, fieldUrl: fieldUrl, mosaic: mosaic
     };
 
 };
 
 fieldviewloader.handleFieldRel = function(urls, res, body, callback) {
     if (res.statusCode === 404) {
-        request.put(urls.fieldUrl, function(error, res) {
+        request.put(urls.fieldRelUrl, function(error, res) {
             console.log('Relationship created');
             if (error) { callback(error); }
             callback();
@@ -238,20 +244,37 @@ fieldviewloader.mapboxUpload = function(urls, file, opts, res, body, callback) {
     }
 };
 
+fieldviewloader.updateMosaicBounds = function(urls, callback) {
+    if (urls.mosaic) {
+        if (!urls.bounds) { callback(new Error('No bounds defined')) }
+        request.put(urls.fieldUrl, { json: { bounds: urls.bounds } },
+                    function(error, res) {
+                        if (error) { callback(error); }
+                        callback();
+                    });
+    } else {
+        callback();
+    }
+};
+
 fieldviewloader.setNodata = function(opts, file, callback) {
     var filePath = path.resolve(opts.imageDirectory, file);
-    var src = gdal.open(filePath);
-    var width = src.rasterSize.x;
-    var height = src.rasterSize.y;
-    var bandCount = src.bands.count();
-    var datatype = src.bands.get(1).datatype;
-    src.close();
-    var dataset = gdal.open(filePath, 'r+', 'GTiff', width, height, bandCount, datatype);
-    dataset.bands.forEach(function(band) {
-        band.noDataValue = 0;
-        band.flush();
-    });
-    dataset.flush();
-    dataset.close();
+    setNoData(filePath);
     callback();
+};
+
+fieldviewloader.getBounds = function(opts, file, urls, callback) {
+    var filePath = path.resolve(opts.imageDirectory, file);
+    urls.bounds = corners(filePath);
+    callback();
+};
+
+fieldviewloader.checkFieldExists = function(urls, callback) {
+    request.get(urls.fieldUrl, function(error, res, body) {
+        if (res.statusCode === 404) {
+            callback(new Error('The field for this image has not been created yet'));
+        } else {
+            callback();
+        }
+    });
 };
