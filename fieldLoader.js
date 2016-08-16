@@ -41,7 +41,11 @@ fieldloader.processFile = function(err, opts, credentials) {
             "farmId": feature.properties.farmId,
             "bounds": [[extent[0], extent[1]], [extent[2], extent[3]]]
         };
-        if (!feature.properties.farmId) {
+        if (!feature.properties.fieldId === 0) {
+            console.log(util.format('Field %s has an invalid id'));
+            callback();
+        }
+        if (!feature.properties.farmId || feature.properties.farmId === 0) {
             console.log(util.format('Field %s is missing a Farm', id));
             callback();
         }
@@ -53,7 +57,7 @@ fieldloader.processFile = function(err, opts, credentials) {
             callback();
         });
     }, function(err) {
-        console.log(err);
+        if (err) { console.log(err) }
     });
 };
 
