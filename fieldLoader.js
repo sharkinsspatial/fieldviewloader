@@ -21,43 +21,88 @@ fieldloader.opts = function(opts) {
 
 fieldloader.processFile = function(err, opts, credentials) {
     var url = util.format('%s/api/fields?access_token=%s', opts.urlRoot, credentials.id);
-    //var json = JSON.parse(fs.readFileSync(opts.geojson, 'utf8'));
-    var json = opts.geojson
-    async.forEachLimit(json.features, 10, function(feature, callback) {
-        var name;
-        var id;
-        if (feature.properties.farm) {
-            id = 1000000 + feature.properties.farmId;
-            name = feature.properties.farm + ' - ' + 'Mosaic';
+    var errorReports = [];
+    async.forEachLimit(opts.geojson.features, 10, function(feature, forEachCallback) {
+        if (!fieldloader.featureIsValid(feature, errorReports)) {
+            forEachCallback()
+        } else {
+            var field = fieldloader.createField(feature);
+            var farmUrl = util.format('%s/api/farms/%s?access_token=%s',
+                  opts.urlRoot, feature.properties.farmId, credentials.id);
+                  async.waterfall([
+                      async.apply(fieldloader.checkFarmExists, farmUrl),
+                      async.apply(fieldloader.loadField, field, url, errorReports)
+                  ],
+                  function(err) {
+                      if (err) { forEachCallback(err); }
+                      forEachCallback();
+                  });
         }
-        else {
-            id = feature.properties.id;
-            name = feature.properties.name ? feature.properties.name : 'None';
-        }
-        var extent = geojsonExtent(feature);
-        var field = {
-            "name": name,
-            "id": id,
-            "farmId": feature.properties.farmId,
-            "bounds": [[extent[0], extent[1]], [extent[2], extent[3]]]
-        };
-        if (!feature.properties.fieldId === 0) {
-            console.log(util.format('Field %s has an invalid id'));
-            callback();
-        }
-        if (!feature.properties.farmId || feature.properties.farmId === 0) {
-            console.log(util.format('Field %s is missing a Farm', id));
-            callback();
-        }
+        }, function(err) {
+            if (err) { console.log(err) }
+            errorReports.forEach(function(report) {
+                console.log(report);
+            });
+        });
+};
+
+fieldloader.featureIsValid = function(feature, errorReports) {
+    var isValid = true;
+    if (!feature.properties.farm && !feature.properties.id ||
+        !feature.properties.farm && feature.properties.id === 0) {
+            errorReports.push('Field has an invalid id');
+            isValid = false;
+    } else if (!feature.properties.farmId || feature.properties.farmId === 0) {
+        errorReports.push(util.format('Field %s is missing a Farm',
+                                      feature.properties.id));
+        isValid = false;
+    }
+    return isValid;
+};
+
+fieldloader.createField = function(feature) {
+    var id;
+    var name;
+    if (feature.properties.farm) {
+        id = 1000000 + feature.properties.farmId;
+        name = feature.properties.farm + ' - ' + 'Mosaic';
+    } else {
+        id = feature.properties.id;
+        name = feature.properties.name ? feature.properties.name : 'None';
+    }
+    var extent = geojsonExtent(feature);
+    var field = {
+        "name": name,
+        "id": id,
+        "farmId": feature.properties.farmId,
+        "bounds": [[extent[0], extent[1]], [extent[2], extent[3]]]
+    };
+    return field;
+};
+
+fieldloader.loadField = function(field, url, errorReports, farmExists, callback) {
+    if (farmExists) {
         request.post(url, { json: field }, function(err, res) {
             if (err) return callback(err);
             if (res.statusCode === 200) {
-                console.log(util.format('Field %s created', id));
+                console.log(util.format('Field %s created', field.id));
             }
             callback();
         });
-    }, function(err) {
-        if (err) { console.log(err) }
-    });
+    } else {
+        errorReports.push(util.format('For field %s, farm %s does not exist in the database',
+                                field.id, field.farmId));
+        callback();
+    }
+
 };
 
+fieldloader.checkFarmExists = function(farmUrl, callback) {
+    request.get(farmUrl, function(err, res) {
+        if (res.statusCode === 200) {
+            callback(null, true);
+        } else {
+            callback(null, false);
+        }
+    });
+};

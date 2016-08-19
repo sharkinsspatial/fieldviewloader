@@ -13,11 +13,12 @@ var password = process.env.ADMIN_PASSWORD;
 var filepath = argv._[0];
 var filename = filepath.split('.')[0];
 
-var createGeojson = ogr2ogr(filepath).options(['-sql',
-                         util.format('SELECT FieldID as id, FieldName as name, '
-                                     + 'FarmID as farmId from %s', filename)])
+var createGeojson = ogr2ogr(filepath).options(['-t_srs', 'EPSG:4326',
+                    '-sql', util.format('SELECT FieldID as id, FieldName as name, '
+                                     + 'FarmID as farmId from %s', filename)]);
 
-var createMosaicGeojson = ogr2ogr(filepath).options(['-dialect', 'sqlite',
+var createMosaicGeojson = ogr2ogr(filepath).options(['-t_srs', 'EPSG:4326',
+                            '-dialect', 'sqlite',
                             '-sql', util.format('SELECT ST_Union(geometry), '
                                 + 'FarmID as farmId, Farm as farm FROM %s '
                                 + 'GROUP BY FarmID, Farm', filename)]);
